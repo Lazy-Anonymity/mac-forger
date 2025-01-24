@@ -1,0 +1,56 @@
+#!/bin/bash
+
+if [ -z "$MAC_FORGER_BINARY_PATH" ]; then
+  export MAC_FORGER_BINARY_PATH="/usr/bin/mac-forger"
+fi
+
+if [ -z "$MAC_FORGER_CONFIG_PATH" ]; then
+  export MAC_FORGER_CONFIG_PATH="/etc/mac-forger.conf"
+fi
+
+MAC_SOURCE=$(cat "$MAC_FORGER_CONFIG_PATH" | grep "source" | awk '{gsub(/[ \t]+/, ""); print}' | cut -d"=" -f2)
+
+get_random_mac(){
+printf "00:%02X:%02X:%02X:%02X:%02X" \
+  $((RANDOM % 256)) $((RANDOM % 256)) $((RANDOM % 256)) \
+  $((RANDOM % 256)) $((RANDOM % 256))
+}
+
+get_interface_by_ip(){
+  ip link show | grep -E '^[0-9]+: (.*):' | cut -d: -f2 | tr -d ' '
+}
+
+main(){
+
+  NETWORK_INTERFACES=$(get_interface_by_ip)
+
+  for INTERFACE in $NETWORK_INTERFACES; do
+    local CURRENT_MAC_ADDRESS
+
+    if [[ "$INTERFACE" == "lo" || "$INTERFACE" == "docker0" || "$INTERFACE" == "vboxnet0" ]]; then
+      continue
+    fi
+
+    if [ "$MAC_SOURCE" = "RANDOM" ]; then
+      CURRENT_MAC_ADDRESS=$(get_random_mac)
+    else
+      CURRENT_MAC_ADDRESS="$MAC_SOURCE"
+    fi
+
+    if [[ ! "$CURRENT_MAC_ADDRESS" =~ ^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$ ]]; then
+      echo "Erro: Invalid MAC address: $CURRENT_MAC_ADDRESS"
+      exit 1
+    fi
+
+    if ip link show "$INTERFACE" | grep -q "state UP"; then
+      ip link set dev "$INTERFACE" down
+      sleep 2
+    fi
+
+    ip link set dev "$INTERFACE" address $CURRENT_MAC_ADDRESS
+    ip link set dev "$INTERFACE" up
+    sleep 2
+  done
+}
+
+main
