@@ -1,0 +1,12 @@
+[Unit]
+Description=MAC Forger
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/mac-forger
+RemainAfterExit=true
+
+[Install]
+WantedBy=multi-user.target
